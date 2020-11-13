@@ -1,3 +1,6 @@
 [submodule "open_manipulator_haptic_bridge"]
 	path = open_manipulator_haptic_bridge
 	url = https://github.com/dudasdavid/open_manipulator_haptic_bridge
+[submodule "mogi_haptic_device"]
+	path = mogi_haptic_device
+	url = https://github.com/dudasdavid/mogi_haptic_device
