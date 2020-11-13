@@ -1,0 +1,3 @@
+[submodule "open_manipulator_haptic_bridge"]
+	path = open_manipulator_haptic_bridge
+	url = https://github.com/dudasdavid/open_manipulator_haptic_bridge
