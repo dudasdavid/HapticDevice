@@ -76,9 +76,17 @@ static double offset2 = 165.0;
 static double offset3 = 10.0;
 static double offset4 = -144.0;
 
+// Feedback
+static uint8_t feedback = 0;
+static uint8_t feedback_temp = 0;
+
 // Button status
 static uint8_t b1Status = 0;
 static uint8_t b2Status = 0;
+static uint8_t b1_auxStatus = 0;
+static uint8_t b2_auxStatus = 0;
+static uint8_t b3_auxStatus = 0;
+static uint8_t b4_auxStatus = 0;
 
 // USB CDC communication
 char txBuf[64];
@@ -492,20 +500,72 @@ void StartCommTask(void const * argument)
   for(;;)
   {
 	if (receiveState == 1){
+	  // Dummy command
 	  if ((rxBuf[0] == 'K') && (rxBuf[1] == 'A') && (rxBuf[2] == '\r')){ // KA = Keep alive (response echo)
 		__ASM("NOP");
 	  }
+	  // Clear error counter
 	  else if ((rxBuf[0] == 'C') && (rxBuf[1] == 'E') && (rxBuf[2] == 'C') && (rxBuf[3] == '\r')){
 		errorCounter = 0;
 		sprintf(txBuf, "OK;%s\r\n", rxBuf);
 		Len = SizeofCharArray((char*)txBuf);
 		CDC_Transmit_FS((uint8_t*)txBuf, Len);
 	  }
+	  // Read error counter
 	  else if ((rxBuf[0] == 'R') && (rxBuf[1] == 'E') && (rxBuf[2] == 'C') && (rxBuf[3] == '\r')){
 		sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, errorCounter);
 		Len = SizeofCharArray((char*)txBuf);
 		CDC_Transmit_FS((uint8_t*)txBuf, Len);
 	  }
+	  // Read joint offsets
+	  else if ((rxBuf[0] == 'R') && (rxBuf[1] == 'O') && (rxBuf[3] == '\r')){
+		if (rxBuf[2] == '1') {
+			sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, (int16_t)(offset1*100));
+		}
+		else if (rxBuf[2] == '2') {
+			sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, (int16_t)(offset2*100));
+		}
+		else if (rxBuf[2] == '3') {
+			sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, (int16_t)(offset3*100));
+		}
+		else if (rxBuf[2] == '4') {
+			sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, (int16_t)(offset4*100));
+		}
+		else {
+			sprintf(txBuf, "ERR;%s\r\n", rxBuf);
+		}
+		Len = SizeofCharArray((char*)txBuf);
+		CDC_Transmit_FS((uint8_t*)txBuf, Len);
+	  }
+	  // Set joint offsets
+	  else if ((rxBuf[0] == 'S') && (rxBuf[1] == 'O') && (rxBuf[3] == '\r')){
+		sprintf(txBuf, "OK;%s;%s\r\n", rxBuf, "To be implemented...");
+		Len = SizeofCharArray((char*)txBuf);
+		CDC_Transmit_FS((uint8_t*)txBuf, Len);
+	  }
+	  // Read device status, returns joint angles and button status
+	  else if ((rxBuf[0] == 'R') && (rxBuf[1] == 'D') && (rxBuf[2] == 'S') && (rxBuf[3] == '\r')){
+		sprintf(txBuf, "OK;%s;%d;%d;%d;%d;%d;%d;%d;%d;%d;%d\r\n", rxBuf, (int16_t)(angle1*100), (int16_t)(angle2*100), (int16_t)(angle3*100), (int16_t)(angle4*100), b1Status, b2Status, b1_auxStatus, b2_auxStatus, b3_auxStatus, b4_auxStatus);
+		Len = SizeofCharArray((char*)txBuf);
+		CDC_Transmit_FS((uint8_t*)txBuf, Len);
+	  }
+	  // Read feedback status 0...100
+	  else if ((rxBuf[0] == 'R') && (rxBuf[1] == 'F') && (rxBuf[2] == 'B') && (rxBuf[3] == '\r')){
+		sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, feedback);
+		Len = SizeofCharArray((char*)txBuf);
+		CDC_Transmit_FS((uint8_t*)txBuf, Len);
+	  }
+	  // Set feedback status 0...100
+	  else if ((rxBuf[0] == 'S') && (rxBuf[1] == 'F') && (rxBuf[2] == 'B') && (rxBuf[6] == '\r')){
+		feedback_temp = (int16_t)((rxBuf[3]  - '0')*100 + (rxBuf[4]  - '0')*10 + (rxBuf[5]  - '0')*1);
+		if (feedback_temp > 100) feedback_temp = 100;
+		feedback = feedback_temp;
+		TIM1->CCR1 = feedback*3600/100;
+		sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, feedback);
+		Len = SizeofCharArray((char*)txBuf);
+		CDC_Transmit_FS((uint8_t*)txBuf, Len);
+	  }
+	  // Unrecognized command
       else{
         sprintf(txBuf, "ERR;%s\r\n", rxBuf);
         Len = SizeofCharArray((char*)txBuf);
