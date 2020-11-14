@@ -53,12 +53,28 @@ osThreadId sensorTaskHandle;
 
 // Sensor communication
 errorTypes checkError = NO_ERROR;
+uint16_t errorCounter = 0;
 
 // Joint angles
+static double angle1_raw = 0.0;
+static double angle2_raw = 0.0;
+static double angle3_raw = 0.0;
+static double angle4_raw = 0.0;
+
+static double angle1_temp = 0.0;
+static double angle2_temp = 0.0;
+static double angle3_temp = 0.0;
+static double angle4_temp = 0.0;
+
 static double angle1 = 0.0;
 static double angle2 = 0.0;
 static double angle3 = 0.0;
 static double angle4 = 0.0;
+
+static double offset1 = 0.0;
+static double offset2 = 165.0;
+static double offset3 = 10.0;
+static double offset4 = -144.0;
 
 // Button status
 static uint8_t b1Status = 0;
@@ -68,8 +84,8 @@ static uint8_t b2Status = 0;
 char txBuf[64];
 char rxBuf[64];
 uint8_t receiveState = 0;
-static volatile uint32_t timeStamp =0;
-static volatile uint32_t timeOutGuard =0;
+static volatile uint32_t timeStamp = 0;
+static volatile uint32_t timeOutGuard = 0;
 static volatile uint32_t timeOutGuardMax = 0;
 /* USER CODE END PV */
 
@@ -242,7 +258,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_2EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -479,13 +495,19 @@ void StartCommTask(void const * argument)
 	  if ((rxBuf[0] == 'K') && (rxBuf[1] == 'A') && (rxBuf[2] == '\r')){ // KA = Keep alive (response echo)
 		__ASM("NOP");
 	  }
-	  else if ((rxBuf[0] == 'S') && (rxBuf[1] == 'T') && (rxBuf[2] == 'R') && (rxBuf[6] == '\r')){
-		sprintf(txBuf, "OK: %s\r\n", rxBuf);
+	  else if ((rxBuf[0] == 'C') && (rxBuf[1] == 'E') && (rxBuf[2] == 'C') && (rxBuf[3] == '\r')){
+		errorCounter = 0;
+		sprintf(txBuf, "OK;%s\r\n", rxBuf);
+		Len = SizeofCharArray((char*)txBuf);
+		CDC_Transmit_FS((uint8_t*)txBuf, Len);
+	  }
+	  else if ((rxBuf[0] == 'R') && (rxBuf[1] == 'E') && (rxBuf[2] == 'C') && (rxBuf[3] == '\r')){
+		sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, errorCounter);
 		Len = SizeofCharArray((char*)txBuf);
 		CDC_Transmit_FS((uint8_t*)txBuf, Len);
 	  }
       else{
-        sprintf(txBuf, "ERR: %s\r\n", rxBuf);
+        sprintf(txBuf, "ERR;%s\r\n", rxBuf);
         Len = SizeofCharArray((char*)txBuf);
         CDC_Transmit_FS((uint8_t*)txBuf, Len);
       }
@@ -513,25 +535,90 @@ void StartCommTask(void const * argument)
 void StartSensorTask(void const * argument)
 {
   /* USER CODE BEGIN StartSensorTask */
-  SPI_CS_Disable(0);
   SPI_CS_Disable(1);
+  SPI_CS_Disable(2);
+  SPI_CS_Disable(3);
+  SPI_CS_Disable(4);
+
+  checkError = NO_ERROR;
+  checkError = readBlockCRC(1);
+  if (checkError != NO_ERROR) errorCounter++;
+  HAL_Delay(1);
+
+  checkError = NO_ERROR;
   checkError = readBlockCRC(2);
-  checkError = NO_ERROR;
+  if (checkError != NO_ERROR) errorCounter++;
   HAL_Delay(1);
+
+  checkError = NO_ERROR;
   checkError = readBlockCRC(3);
-  checkError = NO_ERROR;
+  if (checkError != NO_ERROR) errorCounter++;
   HAL_Delay(1);
-  checkError = readBlockCRC(4);
+
   checkError = NO_ERROR;
+  checkError = readBlockCRC(4);
+  if (checkError != NO_ERROR) errorCounter++;
+  HAL_Delay(1);
+
   /* Infinite loop */
   for(;;)
   {
     osDelay(10);
-    checkError = getAngleValue(&angle2,2);
+
+    //checkError = NO_ERROR;
+    //checkError = getAngleValue(&angle1_raw,1);
+    //if (checkError != NO_ERROR) errorCounter++;
+    //HAL_Delay(1);
+
+    checkError = NO_ERROR;
+    checkError = getAngleValue(&angle2_raw,2);
+    if (checkError != NO_ERROR) errorCounter++;
     HAL_Delay(1);
-    checkError = getAngleValue(&angle3,3);
+
+    checkError = NO_ERROR;
+    checkError = getAngleValue(&angle3_raw,3);
+    if (checkError != NO_ERROR) errorCounter++;
     HAL_Delay(1);
-    checkError = getAngleValue(&angle4,4);
+
+    checkError = NO_ERROR;
+    checkError = getAngleValue(&angle4_raw,4);
+    if (checkError != NO_ERROR) errorCounter++;
+
+
+    // processing raw angles
+    // math should be cleaned up though...
+    angle1_temp = -angle1_raw;
+    if (angle1_temp >= 0){
+    	angle1 = angle1_temp - 360.0 + offset1;
+    }
+    else{
+    	angle1 = angle1_temp + offset1;
+    }
+
+    angle2_temp = -angle2_raw;
+    if (angle2_temp >= 0){
+    	angle2 = angle2_temp - 360.0 + offset2;
+    }
+    else{
+    	angle2 = angle2_temp + offset2;
+    }
+
+    angle3_temp = -angle3_raw;
+    if (angle3_temp >= 0){
+    	angle3 = angle3_temp + offset3;
+    }
+    else{
+    	angle3 = angle3_temp + offset3;
+    }
+
+    angle4_temp = -angle4_raw;
+    if (angle4_temp >= 0){
+    	angle4 = angle4_temp + offset4;
+    }
+    else{
+    	angle4 = angle4_temp + offset4 + 360.0;
+    }
+
   }
   /* USER CODE END StartSensorTask */
 }
