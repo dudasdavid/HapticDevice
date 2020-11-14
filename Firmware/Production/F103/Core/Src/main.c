@@ -47,15 +47,30 @@ SPI_HandleTypeDef hspi1;
 TIM_HandleTypeDef htim1;
 
 osThreadId defaultTaskHandle;
+osThreadId commTaskHandle;
+osThreadId sensorTaskHandle;
 /* USER CODE BEGIN PV */
+
+// Sensor communication
 errorTypes checkError = NO_ERROR;
+
+// Joint angles
 static double angle1 = 0.0;
 static double angle2 = 0.0;
 static double angle3 = 0.0;
 static double angle4 = 0.0;
 
+// Button status
 static uint8_t b1Status = 0;
 static uint8_t b2Status = 0;
+
+// USB CDC communication
+char txBuf[64];
+char rxBuf[64];
+uint8_t receiveState = 0;
+static volatile uint32_t timeStamp =0;
+static volatile uint32_t timeOutGuard =0;
+static volatile uint32_t timeOutGuardMax = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,6 +79,8 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM1_Init(void);
 void StartDefaultTask(void const * argument);
+void StartCommTask(void const * argument);
+void StartSensorTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -129,6 +146,14 @@ int main(void)
   /* definition and creation of defaultTask */
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+
+  /* definition and creation of commTask */
+  osThreadDef(commTask, StartCommTask, osPriorityNormal, 0, 128);
+  commTaskHandle = osThreadCreate(osThread(commTask), NULL);
+
+  /* definition and creation of sensorTask */
+  osThreadDef(sensorTask, StartSensorTask, osPriorityNormal, 0, 128);
+  sensorTaskHandle = osThreadCreate(osThread(sensorTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -366,6 +391,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+/**
+  * @brief EXTI handler
+  * @param GPIO_Pin: Triggered pin
+  * @retval none
+  */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   switch ( GPIO_Pin ) {
@@ -389,6 +420,24 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	break;
   }
 }
+
+/**
+  * @brief Count characters in char array
+  * @param ptr: pointer to char array
+  * @retval Number of characters in array
+  */
+uint16_t SizeofCharArray(char *ptr)
+{
+  /* Local variables */
+  uint16_t len = 0;
+
+  /* Search until end char */
+  while (ptr[len] != '\0') {
+    len++;
+  }
+  return len;
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -403,30 +452,88 @@ void StartDefaultTask(void const * argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
-  SPI_CS_Disable(0);
-  SPI_CS_Disable(1);
-  checkError = readBlockCRC(0);
-  checkError = NO_ERROR;
-  HAL_Delay(1);
-  checkError = readBlockCRC(1);
-  checkError = NO_ERROR;
-  HAL_Delay(1);
-  checkError = readBlockCRC(2);
-  checkError = NO_ERROR;
-
   /* Infinite loop */
   for(;;)
   {
-    osDelay(500);
+    osDelay(200);
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+  }
+  /* USER CODE END 5 */
+}
 
+/* USER CODE BEGIN Header_StartCommTask */
+/**
+* @brief Function implementing the commTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartCommTask */
+void StartCommTask(void const * argument)
+{
+  /* USER CODE BEGIN StartCommTask */
+  uint16_t Len = 0;
+  /* Infinite loop */
+  for(;;)
+  {
+	if (receiveState == 1){
+	  if ((rxBuf[0] == 'K') && (rxBuf[1] == 'A') && (rxBuf[2] == '\r')){ // KA = Keep alive (response echo)
+		__ASM("NOP");
+	  }
+	  else if ((rxBuf[0] == 'S') && (rxBuf[1] == 'T') && (rxBuf[2] == 'R') && (rxBuf[6] == '\r')){
+		sprintf(txBuf, "OK: %s\r\n", rxBuf);
+		Len = SizeofCharArray((char*)txBuf);
+		CDC_Transmit_FS((uint8_t*)txBuf, Len);
+	  }
+      else{
+        sprintf(txBuf, "ERR: %s\r\n", rxBuf);
+        Len = SizeofCharArray((char*)txBuf);
+        CDC_Transmit_FS((uint8_t*)txBuf, Len);
+      }
+      timeStamp = HAL_GetTick();
+      receiveState = 0;
+    }
+
+    timeOutGuard = HAL_GetTick() - timeStamp;
+    if (timeOutGuard > timeOutGuardMax){
+      timeOutGuardMax = timeOutGuard;
+    }
+
+    osDelay(5);
+  }
+  /* USER CODE END StartCommTask */
+}
+
+/* USER CODE BEGIN Header_StartSensorTask */
+/**
+* @brief Function implementing the sensorTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartSensorTask */
+void StartSensorTask(void const * argument)
+{
+  /* USER CODE BEGIN StartSensorTask */
+  SPI_CS_Disable(0);
+  SPI_CS_Disable(1);
+  checkError = readBlockCRC(2);
+  checkError = NO_ERROR;
+  HAL_Delay(1);
+  checkError = readBlockCRC(3);
+  checkError = NO_ERROR;
+  HAL_Delay(1);
+  checkError = readBlockCRC(4);
+  checkError = NO_ERROR;
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(10);
     checkError = getAngleValue(&angle2,2);
     HAL_Delay(1);
     checkError = getAngleValue(&angle3,3);
     HAL_Delay(1);
     checkError = getAngleValue(&angle4,4);
   }
-  /* USER CODE END 5 */
+  /* USER CODE END StartSensorTask */
 }
 
 /**
