@@ -1,6 +1,7 @@
 #MicroXplorer Configuration settings - do not modify
-FREERTOS.IPParameters=Tasks01,configCHECK_FOR_STACK_OVERFLOW,configUSE_MALLOC_FAILED_HOOK
-FREERTOS.Tasks01=defaultTask,0,128,StartDefaultTask,Default,NULL,Dynamic,NULL,NULL
+FREERTOS.FootprintOK=true
+FREERTOS.IPParameters=Tasks01,configCHECK_FOR_STACK_OVERFLOW,configUSE_MALLOC_FAILED_HOOK,FootprintOK
+FREERTOS.Tasks01=defaultTask,0,128,StartDefaultTask,Default,NULL,Dynamic,NULL,NULL;commTask,0,128,StartCommTask,Default,NULL,Dynamic,NULL,NULL;sensorTask,0,128,StartSensorTask,Default,NULL,Dynamic,NULL,NULL
 FREERTOS.configCHECK_FOR_STACK_OVERFLOW=2
 FREERTOS.configUSE_MALLOC_FAILED_HOOK=1
 File.Version=6
