@@ -110,7 +110,7 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
-extern char rxBuf[64];
+extern char rxBuf[128];
 extern uint8_t receiveState;
 /* USER CODE END EXPORTED_VARIABLES */
 

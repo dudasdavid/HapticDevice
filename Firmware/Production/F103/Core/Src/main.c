@@ -89,8 +89,8 @@ static uint8_t b3_auxStatus = 0;
 static uint8_t b4_auxStatus = 0;
 
 // USB CDC communication
-char txBuf[64];
-char rxBuf[64];
+char txBuf[128];
+char rxBuf[128];
 uint8_t receiveState = 0;
 static volatile uint32_t timeStamp = 0;
 static volatile uint32_t timeOutGuard = 0;
@@ -172,7 +172,7 @@ int main(void)
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of commTask */
-  osThreadDef(commTask, StartCommTask, osPriorityNormal, 0, 128);
+  osThreadDef(commTask, StartCommTask, osPriorityNormal, 0, 256);
   commTaskHandle = osThreadCreate(osThread(commTask), NULL);
 
   /* definition and creation of sensorTask */
@@ -580,7 +580,7 @@ void StartCommTask(void const * argument)
       timeOutGuardMax = timeOutGuard;
     }
 
-    osDelay(5);
+    osDelay(10);
   }
   /* USER CODE END StartCommTask */
 }
