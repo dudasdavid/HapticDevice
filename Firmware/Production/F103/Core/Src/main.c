@@ -49,6 +49,7 @@ TIM_HandleTypeDef htim1;
 osThreadId defaultTaskHandle;
 osThreadId commTaskHandle;
 osThreadId sensorTaskHandle;
+osThreadId motorTaskHandle;
 /* USER CODE BEGIN PV */
 
 // Sensor communication
@@ -79,6 +80,7 @@ static double offset4 = -144.0;
 // Feedback
 static uint8_t feedback = 0;
 static uint8_t feedback_temp = 0;
+static uint8_t motorPattern = 0;
 
 // Button status
 static uint8_t b1Status = 0;
@@ -105,6 +107,7 @@ static void MX_TIM1_Init(void);
 void StartDefaultTask(void const * argument);
 void StartCommTask(void const * argument);
 void StartSensorTask(void const * argument);
+void StartMotorTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -178,6 +181,10 @@ int main(void)
   /* definition and creation of sensorTask */
   osThreadDef(sensorTask, StartSensorTask, osPriorityNormal, 0, 128);
   sensorTaskHandle = osThreadCreate(osThread(sensorTask), NULL);
+
+  /* definition and creation of motorTask */
+  osThreadDef(motorTask, StartMotorTask, osPriorityNormal, 0, 128);
+  motorTaskHandle = osThreadCreate(osThread(motorTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -440,6 +447,38 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	  b2Status = 1;
 	}
 	break;
+  case GPIO_PIN_2:
+	if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2)){
+	  b1_auxStatus = 0;
+	}
+	else {
+	  b1_auxStatus = 1;
+	}
+	break;
+  case GPIO_PIN_3:
+	if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)){
+	  b2_auxStatus = 0;
+	}
+	else {
+	  b2_auxStatus = 1;
+	}
+	break;
+  case GPIO_PIN_4:
+	if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4)){
+	  b3_auxStatus = 0;
+	}
+	else {
+	  b3_auxStatus = 1;
+	}
+	break;
+  case GPIO_PIN_5:
+	if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5)){
+	  b4_auxStatus = 0;
+	}
+	else {
+	  b4_auxStatus = 1;
+	}
+	break;
   default:
 	break;
   }
@@ -539,6 +578,7 @@ void StartCommTask(void const * argument)
 	  }
 	  // Set joint offsets
 	  else if ((rxBuf[0] == 'S') && (rxBuf[1] == 'O') && (rxBuf[3] == '\r')){
+		//ToDo: implement writing offsets
 		sprintf(txBuf, "OK;%s;%s\r\n", rxBuf, "To be implemented...");
 		Len = SizeofCharArray((char*)txBuf);
 		CDC_Transmit_FS((uint8_t*)txBuf, Len);
@@ -624,8 +664,6 @@ void StartSensorTask(void const * argument)
   {
     osDelay(10);
 
-    TIM1->CCR1 = feedback*3600/100;
-
     //checkError = NO_ERROR;
     //checkError = getAngleValue(&angle1_raw,1);
     //if (checkError != NO_ERROR) errorCounter++;
@@ -682,6 +720,38 @@ void StartSensorTask(void const * argument)
 
   }
   /* USER CODE END StartSensorTask */
+}
+
+/* USER CODE BEGIN Header_StartMotorTask */
+/**
+* @brief Function implementing the motorTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartMotorTask */
+void StartMotorTask(void const * argument)
+{
+  /* USER CODE BEGIN StartMotorTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(10);
+    if (motorPattern == 1){
+
+    	for (int i = 0; i < 10; i++){
+        	TIM1->CCR1 = 40*3600/100;
+        	osDelay(500);
+        	TIM1->CCR1 = 0*3600/100;
+        	osDelay(500);
+    	}
+
+    	motorPattern = 0;
+    }
+    else {
+    	TIM1->CCR1 = feedback*3600/100;
+    }
+  }
+  /* USER CODE END StartMotorTask */
 }
 
 /**
