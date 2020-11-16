@@ -374,14 +374,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : B_AUX_2_Pin B_AUX_3_Pin */
-  GPIO_InitStruct.Pin = B_AUX_2_Pin|B_AUX_3_Pin;
+  /*Configure GPIO pins : B_AUX_1_Pin B_AUX_2_Pin B_AUX_3_Pin */
+  GPIO_InitStruct.Pin = B_AUX_1_Pin|B_AUX_2_Pin|B_AUX_3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : B1_Pin B2_Pin B_AUX_1_Pin B_AUX_4_Pin */
-  GPIO_InitStruct.Pin = B1_Pin|B2_Pin|B_AUX_1_Pin|B_AUX_4_Pin;
+  /*Configure GPIO pins : B1_Pin B2_Pin B_AUX_4_Pin */
+  GPIO_InitStruct.Pin = B1_Pin|B2_Pin|B_AUX_4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -560,7 +560,6 @@ void StartCommTask(void const * argument)
 		feedback_temp = (int16_t)((rxBuf[3]  - '0')*100 + (rxBuf[4]  - '0')*10 + (rxBuf[5]  - '0')*1);
 		if (feedback_temp > 100) feedback_temp = 100;
 		feedback = feedback_temp;
-		TIM1->CCR1 = feedback*3600/100;
 		sprintf(txBuf, "OK;%s;%d\r\n", rxBuf, feedback);
 		Len = SizeofCharArray((char*)txBuf);
 		CDC_Transmit_FS((uint8_t*)txBuf, Len);
@@ -624,6 +623,8 @@ void StartSensorTask(void const * argument)
   for(;;)
   {
     osDelay(10);
+
+    TIM1->CCR1 = feedback*3600/100;
 
     //checkError = NO_ERROR;
     //checkError = getAngleValue(&angle1_raw,1);
