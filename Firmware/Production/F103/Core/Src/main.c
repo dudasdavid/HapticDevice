@@ -72,7 +72,7 @@ static double angle2 = 0.0;
 static double angle3 = 0.0;
 static double angle4 = 0.0;
 
-static double offset1 = 0.0;
+static double offset1 = 117.5;
 static double offset2 = 165.0;
 static double offset3 = 10.0;
 static double offset4 = -144.0;
@@ -664,10 +664,10 @@ void StartSensorTask(void const * argument)
   {
     osDelay(10);
 
-    //checkError = NO_ERROR;
-    //checkError = getAngleValue(&angle1_raw,1);
-    //if (checkError != NO_ERROR) errorCounter++;
-    //HAL_Delay(1);
+    checkError = NO_ERROR;
+    checkError = getAngleValue(&angle1_raw,1);
+    if (checkError != NO_ERROR) errorCounter++;
+    HAL_Delay(1);
 
     checkError = NO_ERROR;
     checkError = getAngleValue(&angle2_raw,2);
@@ -685,13 +685,13 @@ void StartSensorTask(void const * argument)
 
 
     // processing raw angles
-    // math should be cleaned up though...
-    angle1_temp = -angle1_raw;
+    // ToDo: math should be cleaned up though...
+    angle1_temp = angle1_raw;
     if (angle1_temp >= 0){
-    	angle1 = angle1_temp - 360.0 + offset1;
+    	angle1 = angle1_temp - offset1;
     }
     else{
-    	angle1 = angle1_temp + offset1;
+    	angle1 = angle1_temp - offset1 + 360.0;
     }
 
     angle2_temp = -angle2_raw;
