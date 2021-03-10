@@ -72,7 +72,7 @@ static double angle2 = 0.0;
 static double angle3 = 0.0;
 static double angle4 = 0.0;
 
-static double offset1 = 117.5;
+static double offset1 = -62.7;
 static double offset2 = 165.0;
 static double offset3 = 10.0;
 static double offset4 = -144.0;
@@ -691,7 +691,7 @@ void StartSensorTask(void const * argument)
     	angle1 = angle1_temp - offset1;
     }
     else{
-    	angle1 = angle1_temp - offset1 + 360.0;
+    	angle1 = angle1_temp - offset1;
     }
 
     angle2_temp = -angle2_raw;
