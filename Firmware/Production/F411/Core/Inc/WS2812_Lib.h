@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 
-#define WS2812_NUM_LEDS_CH1     16
+#define WS2812_NUM_LEDS_CH1     72
 #define WS2812_NUM_RESET_BITS   48
 
 #define WS2812_OUT_BITS   (WS2812_NUM_LEDS_CH1 * 24 + WS2812_NUM_RESET_BITS)
