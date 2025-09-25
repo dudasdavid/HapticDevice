@@ -26,6 +26,7 @@
 #include "usbd_cdc_if.h"
 #include "WS2812_Lib.h"
 #include "DTek_TLE5012B.h"
+#include "drv2605l.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -105,21 +106,25 @@ static double angle1_raw = 0.0;
 static double angle2_raw = 0.0;
 static double angle3_raw = 0.0;
 static double angle4_raw = 0.0;
+static double angle5_raw = 0.0;
 
 static double angle1_temp = 0.0;
 static double angle2_temp = 0.0;
 static double angle3_temp = 0.0;
 static double angle4_temp = 0.0;
+static double angle5_temp = 0.0;
 
 static double angle1 = 0.0;
 static double angle2 = 0.0;
 static double angle3 = 0.0;
 static double angle4 = 0.0;
+static double angle5 = 0.0;
 
 static double offset1 = -62.7;
 static double offset2 = 165.0;
 static double offset3 = 10.0;
 static double offset4 = -144.0;
+static double offset5 = -144.0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -564,7 +569,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, TLE5012B_CS1_Pin|TLE5012B_CS2_Pin|TLE5012B_CS3_Pin|SPI1_FLASH_CS_Pin
-                          |TLE5012B_CS4_Pin, GPIO_PIN_RESET);
+                          |TLE5012B_CS4_Pin|TLE5012B_CS5_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : USER_LED_Pin */
   GPIO_InitStruct.Pin = USER_LED_Pin;
@@ -580,9 +585,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(USER_BUTTON_EXTI0_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : TLE5012B_CS1_Pin TLE5012B_CS2_Pin TLE5012B_CS3_Pin SPI1_FLASH_CS_Pin
-                           TLE5012B_CS4_Pin */
+                           TLE5012B_CS4_Pin TLE5012B_CS5_Pin */
   GPIO_InitStruct.Pin = TLE5012B_CS1_Pin|TLE5012B_CS2_Pin|TLE5012B_CS3_Pin|SPI1_FLASH_CS_Pin
-                          |TLE5012B_CS4_Pin;
+                          |TLE5012B_CS4_Pin|TLE5012B_CS5_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -668,10 +673,18 @@ void StartDefaultTask(void *argument)
 void StartHapticTask(void *argument)
 {
   /* USER CODE BEGIN StartHapticTask */
+    // Initialize as ERM with library 1
+	if (DRV2605_Init_ERM(&hi2c1, DRV2605_LIB_ERM) != HAL_OK) {
+		// handle error (check wiring, power, pull-ups, I2C timing)
+		asm("NOP");
+	}
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(2000);
+    DRV2605_SetEffectSlot(&hi2c1, 0, 15);
+    DRV2605_SetEffectSlot(&hi2c1, 1, 0x00); // terminator
+    DRV2605_Play(&hi2c1);
   }
   /* USER CODE END StartHapticTask */
 }
@@ -724,6 +737,7 @@ void StartSensorTask(void *argument)
   SPI_CS_Disable(2);
   SPI_CS_Disable(3);
   SPI_CS_Disable(4);
+  SPI_CS_Disable(5);
 
   checkError = NO_ERROR;
   checkError = readBlockCRC(1);
@@ -742,6 +756,11 @@ void StartSensorTask(void *argument)
 
   checkError = NO_ERROR;
   checkError = readBlockCRC(4);
+  if (checkError != NO_ERROR) errorCounter++;
+  osDelay(1);
+
+  checkError = NO_ERROR;
+  checkError = readBlockCRC(5);
   if (checkError != NO_ERROR) errorCounter++;
   osDelay(1);
 
@@ -767,6 +786,11 @@ void StartSensorTask(void *argument)
 
 	checkError = NO_ERROR;
 	checkError = getAngleValue(&angle4_raw,4);
+	if (checkError != NO_ERROR) errorCounter++;
+	HAL_Delay(1);
+
+	checkError = NO_ERROR;
+	checkError = getAngleValue(&angle5_raw,5);
 	if (checkError != NO_ERROR) errorCounter++;
 
 
@@ -802,6 +826,14 @@ void StartSensorTask(void *argument)
 	}
 	else{
 		angle4 = angle4_temp + offset4 + 360.0;
+	}
+
+	angle5_temp = -angle5_raw;
+	if (angle5_temp >= 0){
+		angle5 = angle5_temp + offset5;
+	}
+	else{
+		angle5 = angle5_temp + offset5 + 360.0;
 	}
   }
   /* USER CODE END StartSensorTask */

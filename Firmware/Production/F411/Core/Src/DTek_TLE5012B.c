@@ -701,6 +701,9 @@ void SPI_CS_Enable(uint8_t csSelector)
 	else if (csSelector == 4) {
 		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
 	}
+	else if (csSelector == 5) {
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
+	}
 	else {
 		__asm("NOP");
 	}
@@ -723,6 +726,9 @@ void SPI_CS_Disable(uint8_t csSelector)
 	}
 	else if (csSelector == 4) {
 		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+	}
+	else if (csSelector == 5) {
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
 	}
 	else {
 		__asm("NOP");
