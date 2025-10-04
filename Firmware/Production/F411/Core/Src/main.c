@@ -23,6 +23,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdbool.h>
+#include <math.h>
 #include "usbd_cdc_if.h"
 #include "WS2812_Lib.h"
 #include "DTek_TLE5012B.h"
@@ -120,11 +122,27 @@ static double angle3 = 0.0;
 static double angle4 = 0.0;
 static double angle5 = 0.0;
 
-static double offset1 = -62.7;
-static double offset2 = 165.0;
-static double offset3 = 10.0;
-static double offset4 = -144.0;
-static double offset5 = -144.0;
+static double offset1 = 0.4;
+static double offset2 = -106.15;
+static double offset3 = 160.9;
+static double offset4 = 84.9;
+static double offset5 = 0.73;
+
+float tcp_x = 0.0;
+float tcp_z = 0.0;
+
+int16_t rawEncoder = 0;
+
+static bool isHomed = false;
+static bool isConnected = false;
+static bool isControlActive = false;
+
+
+static uint8_t status_flag = 0; // 0: not connected, 1: control inactive 2: control active
+
+static volatile uint32_t comm_timestamp = 0;
+static volatile uint32_t comm_timeout = 1000; // ms
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -505,15 +523,15 @@ static void MX_TIM1_Init(void)
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  sConfig.EncoderMode = TIM_ENCODERMODE_TI1;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
   sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC1Filter = 0;
+  sConfig.IC1Filter = 3;
   sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 0;
+  sConfig.IC2Filter = 3;
   if (HAL_TIM_Encoder_Init(&htim1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -654,11 +672,24 @@ void StartDefaultTask(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
+  uint8_t i = 0;
   /* Infinite loop */
   for(;;)
   {
-	  osDelay(200);
-	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  osDelay(50);
+	  i++;
+	  if (i > 5){
+		  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+		  i = 0;
+	  }
+
+	  if (HAL_GetTick() - comm_timestamp > comm_timeout) {
+		  isConnected = false;
+		  status_flag = 0; // fallback to 0 status == not connected signal on LEDs
+	  }
+	  else {
+		  isConnected = true;
+	  }
   }
   /* USER CODE END 5 */
 }
@@ -684,7 +715,7 @@ void StartHapticTask(void *argument)
     osDelay(2000);
     DRV2605_SetEffectSlot(&hi2c1, 0, 15);
     DRV2605_SetEffectSlot(&hi2c1, 1, 0x00); // terminator
-    DRV2605_Play(&hi2c1);
+    //DRV2605_Play(&hi2c1);
   }
   /* USER CODE END StartHapticTask */
 }
@@ -709,14 +740,26 @@ void StartCommTask(void *argument)
 			Len = SizeofCharArray((char*)txBuf);
 			CDC_Transmit_FS((uint8_t*)txBuf, Len);
 		  }
+		  if ((rxBuf[0] == 'S') && (rxBuf[1] == 'T') && (rxBuf[4] == '\0')){
+			char ch = rxBuf[5];
+			  // Check if it's a digit between '1' and '9'
+			  if (ch >= '1' && ch <= '9'){
+				status_flag = ch - '0';
+			  }
+			  comm_timestamp = HAL_GetTick();
+		  }
 		  else{
 			sprintf(txBuf, "ERR;%.100s\r\n", rxBuf);
 			Len = SizeofCharArray((char*)txBuf);
 			CDC_Transmit_FS((uint8_t*)txBuf, Len);
 		  }
-
-
 		  receiveState = 0;
+	  }
+	  if (isConnected) {
+
+		  sprintf(txBuf, "ANG;%d;%d;%d;%d;%d;END\r\n", (int)(angle1*100), (int)(angle2*100), (int)(angle3*100), (int)(angle4*100), (int)(angle5*100));
+		  Len = SizeofCharArray((char*)txBuf);
+		  CDC_Transmit_FS((uint8_t*)txBuf, Len);
 	  }
 	  osDelay(10);
   }
@@ -733,6 +776,9 @@ void StartCommTask(void *argument)
 void StartSensorTask(void *argument)
 {
   /* USER CODE BEGIN StartSensorTask */
+
+  HAL_TIM_Encoder_Start(&htim1,TIM_CHANNEL_ALL);
+
   SPI_CS_Disable(1);
   SPI_CS_Disable(2);
   SPI_CS_Disable(3);
@@ -769,6 +815,8 @@ void StartSensorTask(void *argument)
   {
 	osDelay(10);
 
+	rawEncoder = TIM1->CNT;
+
 	checkError = NO_ERROR;
 	checkError = getAngleValue(&angle1_raw,1);
 	if (checkError != NO_ERROR) errorCounter++;
@@ -796,45 +844,57 @@ void StartSensorTask(void *argument)
 
 	// processing raw angles
 	// ToDo: math should be cleaned up though...
-	angle1_temp = angle1_raw;
+	angle1_temp = angle1_raw - offset1;
 	if (angle1_temp >= 0){
-		angle1 = angle1_temp - offset1;
+		angle1 = angle1_temp;
 	}
 	else{
-		angle1 = angle1_temp - offset1;
+		angle1 = angle1_temp;
 	}
 
-	angle2_temp = -angle2_raw;
+	angle2_temp = -angle2_raw - offset2;
 	if (angle2_temp >= 0){
-		angle2 = angle2_temp - 360.0 + offset2;
+		angle2 = angle2_temp;
 	}
 	else{
-		angle2 = angle2_temp + offset2;
+		angle2 = angle2_temp;
 	}
 
-	angle3_temp = -angle3_raw;
-	if (angle3_temp >= 0){
-		angle3 = angle3_temp + offset3;
+	angle3_temp = -angle3_raw - offset3;
+	if (angle3_raw >= 45){
+		angle3 = angle3_temp + 360;
 	}
 	else{
-		angle3 = angle3_temp + offset3;
+		angle3 = angle3_temp;
 	}
 
-	angle4_temp = -angle4_raw;
-	if (angle4_temp >= 0){
-		angle4 = angle4_temp + offset4;
+	angle4_temp = angle4_raw - offset4;
+	if (angle4_raw >= -45){
+		angle4 = angle4_temp;
 	}
 	else{
-		angle4 = angle4_temp + offset4 + 360.0;
+		angle4 = angle4_temp + 360;
 	}
 
-	angle5_temp = -angle5_raw;
+	angle5_temp = angle5_raw - offset5;
 	if (angle5_temp >= 0){
-		angle5 = angle5_temp + offset5;
+		angle5 = angle5_temp;
 	}
 	else{
-		angle5 = angle5_temp + offset5 + 360.0;
+		angle5 = angle5_temp;
 	}
+
+	tcp_x = 20.53 + sinf(angle2 * (M_PI / 180.0f)) * 84.43 + sinf((angle2+angle3+90) * (M_PI / 180.0f)) * 63.96 + sinf((angle2+angle3+90+angle4) * (M_PI / 180.0f)) * 75;
+	tcp_z = 57.87 + cosf(angle2 * (M_PI / 180.0f)) * 84.43 + cosf((angle2+angle3+90) * (M_PI / 180.0f)) * 63.96 + cosf((angle2+angle3+90+angle4) * (M_PI / 180.0f)) * 75;
+
+	if ((angle2 < 20) && (angle3 < 60) && (angle3 > 50) && (angle4 < 80) && (angle4 > 65)) {
+		isHomed = true;
+
+	}
+	else {
+		isHomed = false;
+	}
+
   }
   /* USER CODE END StartSensorTask */
 }
@@ -866,6 +926,8 @@ void StartLedTask(void *argument)
 	}
 
 	brightness = brightness + brightnessDir;
+
+	ringLedMode = status_flag;
 
 	switch (ringLedMode) {
 	case 0:
