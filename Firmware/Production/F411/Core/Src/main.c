@@ -123,9 +123,9 @@ static double angle4 = 0.0;
 static double angle5 = 0.0;
 
 static double offset1 = 0.4;
-static double offset2 = -106.15;
-static double offset3 = 160.9;
-static double offset4 = 84.9;
+static double offset2 = 106.15;
+static double offset3 = -160.9+90;
+static double offset4 = -84.9;
 static double offset5 = 0.73;
 
 float tcp_x = 0.0;
@@ -135,9 +135,7 @@ int16_t rawEncoder = 0;
 int16_t rawEncoderPrev = 0;
 static volatile uint32_t encoder_timestamp = 0;
 
-static bool isHomed = false;
 static bool isConnected = false;
-static bool isControlActive = false;
 
 static uint8_t status_flag = 0; // 0: not connected, 1: control inactive 2: control active
 
@@ -681,13 +679,16 @@ void StartDefaultTask(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   uint8_t i = 0;
+  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
   /* Infinite loop */
   for(;;)
   {
 	  osDelay(50);
 	  i++;
-	  if (i > 5){
+	  if ((i == 6) || (i == 10) || (i == 16) || (i == 20)){
 		  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  }
+	  if (i==30) {
 		  i = 0;
 	  }
 
@@ -754,8 +755,8 @@ void StartCommTask(void *argument)
 			Len = SizeofCharArray((char*)txBuf);
 			CDC_Transmit_FS((uint8_t*)txBuf, Len);
 		  }
-		  if ((rxBuf[0] == 'S') && (rxBuf[1] == 'T') && (rxBuf[4] == '\0')){
-			char ch = rxBuf[5];
+		  if ((rxBuf[0] == 'S') && (rxBuf[1] == 'T') && (rxBuf[3] == '\0')){
+			char ch = rxBuf[2];
 			  // Check if it's a digit between '1' and '9'
 			  if (ch >= '1' && ch <= '9'){
 				status_flag = ch - '0';
@@ -771,7 +772,7 @@ void StartCommTask(void *argument)
 	  }
 	  if (isConnected) {
 
-		  sprintf(txBuf, "ANG;%d;%d;%d;%d;%d;SPD;%d;BTN;%d;%d;%d;%d;END\r\n", (int)(angle1*100), (int)(angle2*100), (int)(angle3*100), (int)(angle4*100), (int)(angle5*100), speed, button1, button2, button3, button4);
+		  sprintf(txBuf, "ANG;%d;%d;%d;%d;%d;SPD;%d;BTN;%d;%d;%d;%d;END\n", (int)(angle1*100), (int)(angle2*100), (int)(angle3*100), (int)(angle4*100), (int)(angle5*100), speed, button1, button2, button3, button4);
 		  Len = SizeofCharArray((char*)txBuf);
 		  CDC_Transmit_FS((uint8_t*)txBuf, Len);
 	  }
@@ -888,7 +889,7 @@ void StartSensorTask(void *argument)
 		angle1 = angle1_temp;
 	}
 
-	angle2_temp = -angle2_raw - offset2;
+	angle2_temp = angle2_raw - offset2;
 	if (angle2_temp >= 0){
 		angle2 = angle2_temp;
 	}
@@ -896,23 +897,23 @@ void StartSensorTask(void *argument)
 		angle2 = angle2_temp;
 	}
 
-	angle3_temp = -angle3_raw - offset3;
+	angle3_temp = angle3_raw - offset3;
 	if (angle3_raw >= 45){
-		angle3 = angle3_temp + 360;
+		angle3 = angle3_temp - 360;
 	}
 	else{
 		angle3 = angle3_temp;
 	}
 
-	angle4_temp = angle4_raw - offset4;
+	angle4_temp = -angle4_raw - offset4;
 	if (angle4_raw >= -45){
 		angle4 = angle4_temp;
 	}
 	else{
-		angle4 = angle4_temp + 360;
+		angle4 = angle4_temp - 360;
 	}
 
-	angle5_temp = angle5_raw - offset5;
+	angle5_temp = -angle5_raw - offset5;
 	if (angle5_temp >= 0){
 		angle5 = angle5_temp;
 	}
@@ -920,16 +921,6 @@ void StartSensorTask(void *argument)
 		angle5 = angle5_temp;
 	}
 
-	tcp_x = 20.53 + sinf(angle2 * (M_PI / 180.0f)) * 84.43 + sinf((angle2+angle3+90) * (M_PI / 180.0f)) * 63.96 + sinf((angle2+angle3+90+angle4) * (M_PI / 180.0f)) * 75;
-	tcp_z = 57.87 + cosf(angle2 * (M_PI / 180.0f)) * 84.43 + cosf((angle2+angle3+90) * (M_PI / 180.0f)) * 63.96 + cosf((angle2+angle3+90+angle4) * (M_PI / 180.0f)) * 75;
-
-	if ((angle2 < 20) && (angle3 < 60) && (angle3 > 50) && (angle4 < 80) && (angle4 > 65)) {
-		isHomed = true;
-
-	}
-	else {
-		isHomed = false;
-	}
 
 	if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) == GPIO_PIN_RESET){
 		button1 = 1;
