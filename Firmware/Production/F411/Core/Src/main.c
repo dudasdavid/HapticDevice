@@ -132,16 +132,24 @@ float tcp_x = 0.0;
 float tcp_z = 0.0;
 
 int16_t rawEncoder = 0;
+int16_t rawEncoderPrev = 0;
+static volatile uint32_t encoder_timestamp = 0;
 
 static bool isHomed = false;
 static bool isConnected = false;
 static bool isControlActive = false;
 
-
 static uint8_t status_flag = 0; // 0: not connected, 1: control inactive 2: control active
 
 static volatile uint32_t comm_timestamp = 0;
 static volatile uint32_t comm_timeout = 1000; // ms
+
+static uint8_t button1 = 0;
+static uint8_t button2 = 0;
+static uint8_t button3 = 0;
+static uint8_t button4 = 0;
+
+static int8_t speed = 100;
 
 /* USER CODE END PV */
 
@@ -613,8 +621,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : PB3 PB4 PB8 PB9 */
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_8|GPIO_PIN_9;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
@@ -651,7 +659,7 @@ uint16_t SizeofCharArray(char *ptr)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	switch (GPIO_Pin) {
 	case GPIO_PIN_0:
-		ringLedMode = (ringLedMode+1) % 4;
+		//ringLedMode = (ringLedMode+1) % 4;
 		break;
 	case GPIO_PIN_1:
 		break;
@@ -704,18 +712,24 @@ void StartDefaultTask(void *argument)
 void StartHapticTask(void *argument)
 {
   /* USER CODE BEGIN StartHapticTask */
-    // Initialize as ERM with library 1
-	if (DRV2605_Init_ERM(&hi2c1, DRV2605_LIB_ERM) != HAL_OK) {
-		// handle error (check wiring, power, pull-ups, I2C timing)
-		asm("NOP");
-	}
+  // Initialize as ERM with library 1
+  if (DRV2605_Init_ERM(&hi2c1, DRV2605_LIB_ERM) != HAL_OK) {
+	// handle error (check wiring, power, pull-ups, I2C timing)
+	asm("NOP");
+  }
+  uint8_t status_flag_prev = 0;
+  uint8_t start_up_flag = 1;
   /* Infinite loop */
   for(;;)
   {
-    osDelay(2000);
-    DRV2605_SetEffectSlot(&hi2c1, 0, 15);
-    DRV2605_SetEffectSlot(&hi2c1, 1, 0x00); // terminator
-    //DRV2605_Play(&hi2c1);
+    osDelay(50);
+    if (status_flag != status_flag_prev || start_up_flag == 1) {
+        DRV2605_SetEffectSlot(&hi2c1, 0, 15);
+        DRV2605_SetEffectSlot(&hi2c1, 1, 0x00); // terminator
+        DRV2605_Play(&hi2c1);
+        start_up_flag = 0;
+    }
+    status_flag_prev = status_flag;
   }
   /* USER CODE END StartHapticTask */
 }
@@ -757,7 +771,7 @@ void StartCommTask(void *argument)
 	  }
 	  if (isConnected) {
 
-		  sprintf(txBuf, "ANG;%d;%d;%d;%d;%d;END\r\n", (int)(angle1*100), (int)(angle2*100), (int)(angle3*100), (int)(angle4*100), (int)(angle5*100));
+		  sprintf(txBuf, "ANG;%d;%d;%d;%d;%d;SPD;%d;BTN;%d;%d;%d;%d;END\r\n", (int)(angle1*100), (int)(angle2*100), (int)(angle3*100), (int)(angle4*100), (int)(angle5*100), speed, button1, button2, button3, button4);
 		  Len = SizeofCharArray((char*)txBuf);
 		  CDC_Transmit_FS((uint8_t*)txBuf, Len);
 	  }
@@ -810,12 +824,34 @@ void StartSensorTask(void *argument)
   if (checkError != NO_ERROR) errorCounter++;
   osDelay(1);
 
+  // initialize variables so encoder change is not triggered at startup
+  rawEncoder = TIM1->CNT;
+  rawEncoderPrev = rawEncoder;
+  encoder_timestamp = HAL_GetTick()-5000;
+
   /* Infinite loop */
   for(;;)
   {
 	osDelay(10);
 
 	rawEncoder = TIM1->CNT;
+
+	if (rawEncoder != rawEncoderPrev) {
+		encoder_timestamp = HAL_GetTick();
+	}
+	rawEncoderPrev = rawEncoder;
+
+	if (rawEncoder > 0){
+		speed = 100;
+		__HAL_TIM_SET_COUNTER(&htim1, 0); // reset encoder counter
+	}
+	else if (rawEncoder < -100){
+		speed = 0;
+		__HAL_TIM_SET_COUNTER(&htim1, -100); // reset encoder counter
+	}
+	else {
+		speed = 100 + rawEncoder;
+	}
 
 	checkError = NO_ERROR;
 	checkError = getAngleValue(&angle1_raw,1);
@@ -895,6 +931,34 @@ void StartSensorTask(void *argument)
 		isHomed = false;
 	}
 
+	if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) == GPIO_PIN_RESET){
+		button1 = 1;
+	}
+	else {
+		button1 = 0;
+	}
+
+	if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_RESET){
+		button2 = 1;
+	}
+	else {
+		button2 = 0;
+	}
+
+	if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) == GPIO_PIN_RESET){
+		button3 = 1;
+	}
+	else {
+		button3 = 0;
+	}
+
+	if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9) == GPIO_PIN_RESET){
+		button4 = 1;
+	}
+	else {
+		button4 = 0;
+	}
+
   }
   /* USER CODE END StartSensorTask */
 }
@@ -929,28 +993,35 @@ void StartLedTask(void *argument)
 
 	ringLedMode = status_flag;
 
-	switch (ringLedMode) {
-	case 0:
-	    osDelay(2);
-	    WS2812_ColorWheel_HSV(phase, 0);
-	    phase++;
-		break;
-	case 1:
-		WS2812_All_RGB((WS2812_RGB_t){brightness,0,0},0);
+
+	if (HAL_GetTick() - encoder_timestamp < 2000) {
+		WS2812_DisplayValue(speed, (WS2812_RGB_t){255,255,255},0);
 		osDelay(19);
-		break;
-	case 2:
-		WS2812_All_RGB((WS2812_RGB_t){0,brightness,0},0);
-		osDelay(19);
-		break;
-	case 3:
-		WS2812_All_RGB((WS2812_RGB_t){0,0,brightness},0);
-		osDelay(19);
-		break;
-	case 4:
-		WS2812_All_RGB((WS2812_RGB_t){brightness,brightness,brightness},0);
-		osDelay(2);
-		break;
+	}
+	else {
+		switch (ringLedMode) {
+		case 0:
+			osDelay(2);
+			WS2812_ColorWheel_HSV(phase, 0);
+			phase++;
+			break;
+		case 1:
+			WS2812_All_RGB((WS2812_RGB_t){brightness,0,0},0);
+			osDelay(19);
+			break;
+		case 2:
+			WS2812_All_RGB((WS2812_RGB_t){0,brightness,0},0);
+			osDelay(19);
+			break;
+		case 3:
+			WS2812_All_RGB((WS2812_RGB_t){0,0,brightness},0);
+			osDelay(19);
+			break;
+		case 4:
+			WS2812_All_RGB((WS2812_RGB_t){brightness,brightness,brightness},0);
+			osDelay(2);
+			break;
+		}
 	}
 
 	WS2812_Refresh();

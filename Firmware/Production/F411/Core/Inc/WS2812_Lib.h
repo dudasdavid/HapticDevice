@@ -53,6 +53,7 @@ void WS2812_All_RGB(WS2812_RGB_t rgb_col, uint8_t refresh);
 void WS2812_One_HSV(uint32_t nr, WS2812_HSV_t hsv_col, uint8_t refresh);
 void WS2812_All_HSV(WS2812_HSV_t hsv_col, uint8_t refresh);
 void WS2812_ColorWheel_HSV(uint16_t phase, uint8_t refresh);
+void WS2812_DisplayValue(uint32_t val, WS2812_RGB_t rgb_col, uint8_t refresh);
 void WS2812_Shift_Left(uint8_t refresh);
 void WS2812_Shift_Right(uint8_t refresh);
 void WS2812_Rotate_Left(uint8_t refresh);

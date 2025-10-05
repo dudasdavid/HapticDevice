@@ -364,6 +364,25 @@ void WS2812_ColorWheel_HSV(uint16_t phase, uint8_t refresh)
     }
 }
 
+void WS2812_DisplayValue(uint32_t val, WS2812_RGB_t rgb_col, uint8_t refresh) {
+
+	WS2812_All_RGB((WS2812_RGB_t){0,0,0}, 0);
+
+
+	// symmetrically light up LEDs from the center on both sides based on value
+	for (uint32_t i = 0; i < (int)((float)val / (float)(2*100.0/WS2812_NUM_LEDS_CH1)); i++) {
+	    WS2812_LED_BUF_CH1[WS2812_NUM_LEDS_CH1/2-i] = rgb_col;
+	    WS2812_LED_BUF_CH1[WS2812_NUM_LEDS_CH1/2+i] = rgb_col;
+	}
+
+	WS2812_LED_BUF_CH1[WS2812_NUM_LEDS_CH1/2] = rgb_col; // 1 LED is always lit even if value is 0
+
+	if (refresh == 1)
+	{
+	    WS2812_Refresh();
+	}
+}
+
 /**
  * Shift all LED values one to the right.
  *
